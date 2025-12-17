@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN Model Visualization</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        #controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.85em;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        input {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            margin-top: auto;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            overflow-x: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            position: relative;
+        }
+
+        svg {
+            min-height: 400px;
+            width: 100%;
+        }
+
+        .layer-rect {
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+
+        .layer-rect:hover {
+            filter: brightness(1.1);
+            stroke: #333;
+            stroke-width: 2px;
+        }
+
+        .connection {
+            stroke: #bdc3c7;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.9em;
+            max-width: 250px;
+            z-index: 100;
+        }
+
+        .tooltip h3 {
+            margin: 0 0 5px 0;
+            font-size: 1em;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            padding-bottom: 3px;
+        }
+
+        .tooltip p {
+            margin: 2px 0;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-box {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>RvNet Model Architecture</h1>
+
+    <div id="controls">
+        <div class="control-group">
+            <label>Conv Blocks (Filters)</label>
+            <input type="text" id="conv_block_filters" value="16, 32">
+        </div>
+        <div class="control-group">
+            <label>Layers per Block</label>
+            <input type="number" id="conv_layers_per_block" value="2">
+        </div>
+        <div class="control-group">
+            <label>Final Conv (Filters)</label>
+            <input type="text" id="final_conv_num_filters" value="64">
+        </div>
+        <div class="control-group">
+            <label>Dense Layers</label>
+            <input type="text" id="dense_num_layers" value="128">
+        </div>
+        <div class="control-group">
+            <label>Kernel Size</label>
+            <input type="number" id="kernel_size" value="5">
+        </div>
+        <button onclick="updateVisualization()">Update Model</button>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background: #e74c3c;"></div>Conv1D</div>
+        <div class="legend-item"><div class="legend-box" style="background: #f1c40f;"></div>MaxPool</div>
+        <div class="legend-item"><div class="legend-box" style="background: #2ecc71;"></div>Dense/Output</div>
+        <div class="legend-item"><div class="legend-box" style="background: #95a5a6;"></div>Flatten</div>
+    </div>
+
+    <div id="canvas-container">
+        <svg id="mainSvg"></svg>
+        <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <script>
+        // Configuration mocking the HParams
+        let hparams = {
+            conv_block_filters: [16, 32],
+            conv_layers_per_block: 2,
+            kernel_size: 5,
+            final_conv_num_filters: [64],
+            dense_num_layers: [128],
+            input_length: 401
+        };
+
+        function parseList(str) {
+            return str.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+        }
+
+        function updateParams() {
+            hparams.conv_block_filters = parseList(document.getElementById('conv_block_filters').value);
+            hparams.conv_layers_per_block = parseInt(document.getElementById('conv_layers_per_block').value);
+            hparams.final_conv_num_filters = parseList(document.getElementById('final_conv_num_filters').value);
+            hparams.dense_num_layers = parseList(document.getElementById('dense_num_layers').value);
+            hparams.kernel_size = parseInt(document.getElementById('kernel_size').value);
+        }
+
+        function generateLayers() {
+            const layers = [];
+            let currentShape = [hparams.input_length, 1]; // [Length, Channels]
+
+            // Input
+            layers.push({
+                type: 'Input',
+                shape: [...currentShape],
+                config: { name: 'Input Layer' }
+            });
+
+            // Conv Blocks
+            hparams.conv_block_filters.forEach(filters => {
+                for (let i = 0; i < hparams.conv_layers_per_block; i++) {
+                    // Conv1D, padding='same' preserves length
+                    currentShape = [currentShape[0], filters];
+                    layers.push({
+                        type: 'Conv1D',
+                        shape: [...currentShape],
+                        config: { 
+                            filters: filters, 
+                            kernel_size: hparams.kernel_size, 
+                            padding: 'same', 
+                            activation: 'relu'
+                        }
+                    });
+                }
+                // MaxPool1D
+                // pool_size=2, strides=2. Length halves.
+                const newLen = Math.ceil(currentShape[0] / 2);
+                currentShape = [newLen, filters];
+                layers.push({
+                    type: 'MaxPool1D',
+                    shape: [...currentShape],
+                    config: { pool_size: 2, strides: 2 }
+                });
+            });
+
+            // Final Conv
+            hparams.final_conv_num_filters.forEach(filters => {
+                currentShape = [currentShape[0], filters];
+                layers.push({
+                    type: 'Conv1D',
+                    shape: [...currentShape],
+                    config: { 
+                        filters: filters, 
+                        kernel_size: hparams.kernel_size, 
+                        padding: 'same',
+                        activation: 'relu'
+                    }
+                });
+
+                // Flatten
+                // Note: The original code logic puts flatten inside the loop.
+                const flatSize = currentShape[0] * currentShape[1];
+                currentShape = [flatSize];
+                layers.push({
+                    type: 'Flatten',
+                    shape: [...currentShape],
+                    config: {}
+                });
+            });
+
+            // Dense Layers
+            hparams.dense_num_layers.forEach(units => {
+                currentShape = [units];
+                layers.push({
+                    type: 'Dense',
+                    shape: [...currentShape],
+                    config: { units: units, activation: 'relu' }
+                });
+            });
+
+            // Output
+            currentShape = [1];
+            layers.push({
+                type: 'Dense (Output)',
+                shape: [...currentShape],
+                config: { units: 1 }
+            });
+
+            return layers;
+        }
+
+        const CONFIG = {
+            rectWidth: 40,
+            rectGap: 60,
+            baseHeight: 300,
+            scaleFactor: 2
+        };
+
+        function draw() {
+            const layers = generateLayers();
+            const svg = document.getElementById('mainSvg');
+            svg.innerHTML = ''; // clear
+
+            let x = 50;
+            const centerY = CONFIG.baseHeight / 2;
+            
+            // Adjust SVG width
+            const neededWidth = x + layers.length * (CONFIG.rectWidth + CONFIG.rectGap) + 100;
+            svg.setAttribute('width', Math.max(neededWidth, 1000));
+            svg.setAttribute('height', CONFIG.baseHeight);
+
+            layers.forEach((layer, index) => {
+                layer.x = x;
+                layer.y = centerY;
+                
+                // Determine height based on shape volume or feature count
+                let features = 1;
+                if (layer.shape.length === 2) {
+                    features = layer.shape[1]; // channels
+                } else if (layer.shape.length === 1) {
+                    features = layer.shape[0]; // units
+                    // Compress very large dense layers visually
+                    if (features > 100) features = 50 + Math.sqrt(features);
+                }
+                
+                // Clamp visual height
+                const h = Math.min(Math.max(features * 2, 20), 200);
+                layer.height = h;
+
+                // Color coding
+                let color = '#95a5a6';
+                if (layer.type.includes('Conv')) color = '#e74c3c';
+                else if (layer.type.includes('Pool')) color = '#f1c40f';
+                else if (layer.type.includes('Dense')) color = '#2ecc71';
+
+                // Draw Rect
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("x", x);
+                rect.setAttribute("y", centerY - h / 2);
+                rect.setAttribute("width", CONFIG.rectWidth);
+                rect.setAttribute("height", h);
+                rect.setAttribute("fill", color);
+                rect.setAttribute("rx", 4);
+                rect.setAttribute("class", "layer-rect");
+                
+                // Interaction
+                rect.addEventListener('mouseover', (e) => showTooltip(e, layer));
+                rect.addEventListener('mouseout', hideTooltip);
+
+                svg.appendChild(rect);
+
+                // Draw Line to previous
+                if (index > 0) {
+                    const prev = layers[index - 1];
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", prev.x + CONFIG.rectWidth);
+                    line.setAttribute("y1", prev.y); // center to center
+                    line.setAttribute("x2", x);
+                    line.setAttribute("y2", centerY);
+                    line.setAttribute("class", "connection");
+                    svg.insertBefore(line, svg.firstChild); // Behind rects
+                }
+
+                // Label for some layers
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.textContent = index === 0 ? "Input" : (index === layers.length - 1 ? "Output" : "");
+                if (text.textContent) {
+                    text.setAttribute("x", x + CONFIG.rectWidth/2);
+                    text.setAttribute("y", centerY + h/2 + 20);
+                    text.setAttribute("text-anchor", "middle");
+                    text.setAttribute("font-size", "12px");
+                    text.setAttribute("fill", "#555");
+                    svg.appendChild(text);
+                }
+
+                x += CONFIG.rectWidth + CONFIG.rectGap;
+            });
+        }
+
+        const tooltip = document.getElementById('tooltip');
+
+        function showTooltip(e, layer) {
+            const rect = e.target.getBoundingClientRect();
+            const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+            
+            tooltip.style.left = (rect.right - containerRect.left + 10) + 'px';
+            tooltip.style.top = (rect.top - containerRect.top) + 'px';
+            tooltip.style.opacity = 1;
+
+            let details = '';
+            for (const [key, value] of Object.entries(layer.config)) {
+                details += `<p><strong>${key}:</strong> ${value}</p>`;
+            }
+
+            tooltip.innerHTML = `
+                <h3>${layer.type}</h3>
+                <p><strong>Shape:</strong> [${layer.shape.join(', ')}]</p>
+                ${details}
+            `;
+        }
+
+        function hideTooltip() {
+            tooltip.style.opacity = 0;
+        }
+
+        function updateVisualization() {
+            updateParams();
+            draw();
+        }
+
+        // Init
+        draw();
+
+    </script>
+</body>
+</html>
