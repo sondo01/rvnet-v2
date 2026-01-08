@@ -27,8 +27,7 @@ def run_proper_pipeline():
         print(f"Error: Could not find reference data in {ref_path}")
         return
 
-    # Filter (Strict)
-  
+    # Filter (Strict) 
     ref_clean = pipe.filter_observations(ref_raw)
     
     if not ref_clean:
@@ -70,7 +69,8 @@ def run_proper_pipeline():
         
         # --- Visualization ---
         plt.figure(figsize=(10, 6))
-        plt.plot(TARGET_GRID, individual_residuals.T, color='grey', alpha=0.1)
+        # plt.plot(TARGET_GRID, individual_residuals.T, color='grey', alpha=0.1)
+        plt.ylim(-0.0005, 0.0025)
         plt.plot(TARGET_GRID, daily_residual, color='red', linewidth=2, label='Daily Mean Residual')
         plt.title(f"Residuals: {date}\n(Heliocentric Corrected -> Rest Frame)")
         plt.xlabel("Velocity (km/s)")
