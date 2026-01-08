@@ -103,7 +103,7 @@ def master_shifting(bjd, ccfBary, rvh,
             mu_jup_list.append(m)
 
             if zero_or_median == "zero":
-                print("Shifting to zero")
+                # print("Shifting to zero")
                 # Shift to zero
                 ccf_to_use = compiled_ccf_list[len(compiled_ccf_list) - 1]
 
@@ -121,7 +121,7 @@ def master_shifting(bjd, ccfBary, rvh,
                 m_zero = pfit[1]
                 mu_zero_list.append(m_zero)  # -0.1)
             else:  # shifted to median instead
-                print("Shifting to median")
+                # print("Shifting to median")
                 ccf_to_use = compiled_ccf_list[len(compiled_ccf_list) - 1]
                 shift_to_median = (np.mean(rvh) - rv_from_HARPS)
                 rv_data_shifted = rv_data + shift_to_median
