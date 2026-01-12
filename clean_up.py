@@ -26,7 +26,7 @@ def get_bad_file():
         # Define the conditions
         # 1. drs_quality = "FALSE". 
         # We convert to string and upper case to handle variations like "False", "FALSE", or boolean False.
-        cond_drs = df['drs_quality'].astype(str).str.upper() == 'FALSE'
+        cond_drs = pd.to_numeric(df['rv_diff_extinction'], errors='coerce') < 0.1
         
         # 2. obs_quality < 0.9
         # We ensure it's numeric, coercing errors to NaN (which won't be < 0.9)
