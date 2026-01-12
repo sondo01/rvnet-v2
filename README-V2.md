@@ -55,7 +55,7 @@ Sau bước này, cần kiểm tra xem dưới thư mục rvnet-v2 có thư mụ
 2. Run the script
 
 ```
-python FITS_Preprocess.py
+python PrepareData.py
 ```
 
 This script creates numpy files (.npz) ready for the next steps (create TF files)

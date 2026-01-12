@@ -75,7 +75,7 @@ def master_shifting(bjd, ccfBary, rvh,
                    {'fixed': False, 'step': 1e-9}]
 
         # no_shift fit
-        rv_data = np.linspace(-20, 20, 161)
+        rv_data = np.linspace(-20, 20, 49)
         p_no_shifted = [1., 0.1, 1., 0.5]
         pfit_no_shift, results_no_shift = mpyfit.fit(least, p_no_shifted, (rv_data, CCF_data), parinfo)
         mu_og = pfit_no_shift[1]
@@ -173,8 +173,8 @@ def master_shifting(bjd, ccfBary, rvh,
         final_ccf_list.append(ccf_to_use)
 
         # normalize the CCFs
-        x_left = ccf_to_use[0:40]
-        x_right = ccf_to_use[121:161]
+        x_left = ccf_to_use[0:10]
+        x_right = ccf_to_use[39:49]
         x_norm_range = list(x_left) + list(x_right)
         CCF_normalized = ccf_to_use * (1 / np.mean(x_norm_range))
         CCF_normalized_list.append(CCF_normalized)

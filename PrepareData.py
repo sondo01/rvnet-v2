@@ -6,6 +6,7 @@ from astropy.io import fits
 import sys
 from scipy.interpolate import interp1d
 from scipy import stats
+import pandas as pd
 
 # Assuming rv_net package structure exists as per your setup
 try:
@@ -21,7 +22,7 @@ except ImportError:
 sys.path.append(os.getcwd())
 
 # Constants
-TARGET_GRID_POINTS = 161
+TARGET_GRID_POINTS = 49
 TARGET_RV_GRID = np.linspace(-20, 20, TARGET_GRID_POINTS)
 DEFAULT_STEP_SIZE = 0.82
 
@@ -46,11 +47,16 @@ def calculate_weight(header):
         return 1.0 / (float(rv_err) ** 2)
     return 1.0
 
-def process_single_fits(filepath):
+def process_single_fits(filepath, public_release_values):
     """
     Reads and processes a single FITS file.
     Returns a dictionary of extracted parameters or None if invalid.
     """
+    
+    fname = os.path.basename(filepath)
+    # release = bary_to_helio_list[fname.replace( "_CCF_A.fits", ".fits")]
+    release_name = fname.replace( "_CCF_A.fits", ".fits")
+    # public_release_values.set_index('filename')
     try:
         with fits.open(filepath) as hdul:
             header = hdul[0].header
@@ -58,10 +64,13 @@ def process_single_fits(filepath):
             
             # Extract Critical Params
             bjd = get_header_val(header, ['MJD-OBS', 'BJD', 'HIERARCH TNG QC BJD'])
-            rv = get_header_val(header, ['HIERARCH TNG QC CCF RV', 'HIERARCH ESO QC CCF RV'])
-            fwhm = get_header_val(header, ['HIERARCH TNG QC CCF FWHM', 'HIERARCH ESO QC CCF FWHM'])
-            cont = get_header_val(header, ['HIERARCH TNG QC CCF CONTRAST', 'HIERARCH ESO QC CCF CONTRAST'])
-            bis = get_header_val(header, ['HIERARCH TNG QC CCF BIS SPAN', 'HIERARCH ESO QC CCF BIS SPAN'], 0.0)
+            hrv = get_header_val(header, ['HIERARCH TNG QC CCF RV', 'HIERARCH ESO QC CCF RV'])
+
+            rv = public_release_values.loc[release_name, 'rv_raw']/1000
+            # print(f"BRV: {rv}, verse FITS rv: {hrv}")
+            fwhm = public_release_values.loc[release_name, 'fwhm']/1000
+            cont = public_release_values.loc[release_name, 'contrast']/1000
+            bis = public_release_values.loc[release_name, 'bis_span']/1000
 
             # Validation
             if None in [bjd, rv, fwhm, cont]:
@@ -109,7 +118,7 @@ def process_single_fits(filepath):
                 'bis': float(bis),
                 'weight': weight,
                 'step': step,
-                'native_n': native_n
+                'native_n': native_n,
             }
     except Exception as e:
         print(f"Error reading {os.path.basename(filepath)}: {e}")
@@ -139,10 +148,10 @@ def compute_nightly_average(nightly_data):
     # CCF Weighted Average (Broadcasting)
     # Shape: (N_obs, N_pixels) * (N_obs, 1)
     avg_data['ccf'] = np.sum(arrays['ccf'] * weights[:, np.newaxis], axis=0) / sum_weights
-    
+
     return avg_data
 
-def load_harps_ccf_data(folder_path):
+def load_harps_ccf_data(folder_path, public_release_values):
     """
     Loads and bins HARPS-N CCF data by night.
     """
@@ -161,9 +170,10 @@ def load_harps_ccf_data(folder_path):
 
     valid_count = 0
     for f in file_list:
-        obs = process_single_fits(f)
+        obs = process_single_fits(f, public_release_values)
         if obs:
-            night_id = int(obs['bjd']) # Noon-to-noon grouping
+            # night_id = int(obs['bjd']) # Noon-to-noon grouping
+            night_id = folder_path.replace("DATA/", "") # DATA/2015-08-16
             if night_id not in night_groups:
                 night_groups[night_id] = []
             night_groups[night_id].append(obs)
@@ -182,8 +192,9 @@ def load_harps_ccf_data(folder_path):
     # Compute Averages
     final_data = {k: [] for k in ['bjd', 'rvh', 'ccfBary', 'fwhm', 'cont', 'bis']}
     
-    for night in sorted(night_groups.keys()):
+    for night in sorted(night_groups.keys()):        
         avg = compute_nightly_average(night_groups[night])
+        
         if avg:
             final_data['bjd'].append(avg['bjd'])
             final_data['rvh'].append(avg['rv'])
@@ -243,30 +254,47 @@ def process_date_residuals(data_dict, master_reference_ccf=None, is_reference_ge
     
     return daily_master_ccf
 
-def plot_combined_residuals(velocity_axis, collected_residuals, title_suffix=""):
+def plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffix=""):
     """
     Plots all collected residuals in a single figure.
     """
     if not collected_residuals:
         print("No residuals to plot.")
         return
-
-    plt.figure(figsize=(10, 6))
     
-    for date, resid, color in collected_residuals:
-        plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
+    if opt == "test":
+        
+        for date, resid, color in collected_residuals:      
+            if date in ["2016-03-29", "2015-09-17", "2017-03-07", "2017-08-13"]:
+                plt.figure(figsize=(8, 6))   
+                plt.ylim([-0.0006, 0.0025])        
+                plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
+                plt.title(f"Combined Residual CCFs {date}\nRed = Redshifted, Blue = Blueshifted")
+                plt.xlabel("Radial Velocity (km/s) [Centered]")
+                plt.ylabel("Normalized Flux Residuals")
+                plt.xlim(min(velocity_axis), max(velocity_axis))
+                plt.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
+                plt.grid(True, linestyle=':', alpha=0.6)
+                # plt.legend(loc='best') # Optional if too many dates
+                plt.tight_layout()
+                plt.show()
+    else :
+        plt.figure(figsize=(8, 4)) 
+        plt.ylim([-0.0006, 0.0035])
+        for date, resid, color in collected_residuals:            
+            plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
 
-    plt.title(f"Combined Residual CCFs {title_suffix}\nRed = Redshifted, Blue = Blueshifted")
-    plt.xlabel("Radial Velocity (km/s) [Centered]")
-    plt.ylabel("Normalized Flux Residuals")
-    plt.xlim(min(velocity_axis), max(velocity_axis))
-    plt.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
-    plt.grid(True, linestyle=':', alpha=0.6)
-    # plt.legend(loc='best') # Optional if too many dates
-    plt.tight_layout()
-    plt.show()
+        plt.title(f"Combined Residual CCFs\nRed = Redshifted, Blue = Blueshifted")
+        plt.xlabel("Radial Velocity (km/s) [Centered]")
+        plt.ylabel("Normalized Flux Residuals")
+        plt.xlim(min(velocity_axis), max(velocity_axis))
+        plt.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
+        plt.grid(True, linestyle=':', alpha=0.6)
+        # plt.legend(loc='best') # Optional if too many dates
+        plt.tight_layout()
+        plt.show()
 
-def run_pipeline():
+def run_pipeline(opt="test"):
     base_data_dir = "DATA"
     quiet_date = "2018-03-29"
     
@@ -275,34 +303,44 @@ def run_pipeline():
         return
 
     # Discovery
-    all_subdirs = sorted([d for d in os.listdir(base_data_dir) if os.path.isdir(os.path.join(base_data_dir, d))])
-    target_dates = [d for d in all_subdirs if d != quiet_date]
+    if opt == "full":
+        all_subdirs = sorted([d for d in os.listdir(base_data_dir) if os.path.isdir(os.path.join(base_data_dir, d))])
+        target_dates = [d for d in all_subdirs if d != quiet_date]
+    else:
+        target_dates = ["2016-03-29", "2015-09-17", "2017-03-07", "2017-08-13"]
+  
     
+    # Get a list of BERV_BARY_TO_HELIO for each file
+    public_release_values = pd.read_csv('public_release_timeseries.csv', index_col='filename')
+    # Remove any leading/trailing spaces from column names
+    public_release_values.columns = public_release_values.columns.str.strip()
+
     print(f"Found {len(target_dates)} target dates.")
     print("--- Starting Pipeline ---")
     
     # 1. Generate Master Reference
     print(f"\nProcessing Reference: {quiet_date}")
-    ref_data = load_harps_ccf_data(os.path.join(base_data_dir, quiet_date))
-    
+    ref_data = load_harps_ccf_data(os.path.join(base_data_dir, quiet_date), public_release_values)
+    # print(f"ref_data : {ref_data}")
     if ref_data is None:
         return
 
     master_reference = process_date_residuals(ref_data, is_reference_generation=True)
     ref_mean_rv = np.mean(ref_data['rvh'])
+
     
     # Grid Setup
-    ccf_step = ref_data.get('step', 0.25)
+    # ccf_step = ref_data.get('step', 0.25)
+    ccf_step = 0.82
     n_points = len(master_reference)
     velocity_axis = (np.arange(n_points) - (n_points // 2)) * ccf_step 
 
     # 2. Process Targets
     collected_residuals = []
-
     for date in target_dates:
         print(f"\nProcessing Target: {date}")
         target_path = os.path.join(base_data_dir, date)
-        target_data = load_harps_ccf_data(target_path)
+        target_data = load_harps_ccf_data(target_path, public_release_values)
         
         if target_data is None:
             continue
@@ -311,13 +349,22 @@ def run_pipeline():
         
         # Color Logic
         target_mean_rv = np.mean(target_data['rvh'])
+        # print(f"RV: {target_data['rvh']}")
         is_redshifted = (target_mean_rv - ref_mean_rv) > 0
         color = 'red' if is_redshifted else 'blue'
         
         collected_residuals.append((date, daily_residual, color))
 
     # 3. Final Plot
-    plot_combined_residuals(velocity_axis, collected_residuals, title_suffix=f"(Ref: {quiet_date})")
+    plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffix=f"(Ref: {quiet_date})")
 
 if __name__ == "__main__":
-    run_pipeline()
+    if len(sys.argv) > 1:
+        # sys.argv[0] is the script name, sys.argv[1] is the first argument
+        input_arg = sys.argv[1]
+        if input_arg == "help":
+            print("Option:\n - help: This help. \n - test: (default) plot residual CCFs of specific dates ['2016-03-29', '2015-09-17', '2017-03-07', '2017-08-13'] to compare to the article. \n - full: plot residual CCFs of the full data set.")
+        else:
+            run_pipeline(input_arg)
+    else:
+        run_pipeline()
