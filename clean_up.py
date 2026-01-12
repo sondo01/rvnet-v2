@@ -30,7 +30,7 @@ def get_bad_file():
         
         # 2. obs_quality < 0.9
         # We ensure it's numeric, coercing errors to NaN (which won't be < 0.9)
-        cond_obs = pd.to_numeric(df['obs_quality'], errors='coerce') < 0.9
+        cond_obs = pd.to_numeric(df['obs_quality'], errors='coerce') < 0.99
         
         # Apply the filter with OR logic (|)
         bad_files_df = df[cond_drs | cond_obs]
@@ -72,6 +72,7 @@ def clean_up_events(target_dates):
 if __name__ == "__main__":
     # # Filter not good observations by changing file extension to .stif
     base_data_dir = "DATA"
+    quiet_date = "2018-03-29"
     all_subdirs = sorted([d for d in os.listdir(base_data_dir) if os.path.isdir(os.path.join(base_data_dir, d))])
     target_dates = [d for d in all_subdirs if d != quiet_date]
     clean_up_events(target_dates)
