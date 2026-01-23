@@ -6,8 +6,8 @@ import pandas as pd
 def get_bad_file():
     """
     Reads a CSV file and returns a list of filenames where:
-    - drs_quality is "FALSE" (or False)
-    - OR obs_quality < 0.9
+    - rv_diff_extinction < 0.1m/s
+    - OR obs_quality > 0.99
     
     Args:
         csv_file_path (str): Path to the public_release_timeseries.csv file.
@@ -24,20 +24,19 @@ def get_bad_file():
         df.columns = df.columns.str.strip()
         
         # Define the conditions
-        # 1. drs_quality = "FALSE". 
-        # We convert to string and upper case to handle variations like "False", "FALSE", or boolean False.
+        # we use .csv file value where rv_diff_extinction is in m/s
         cond_drs = pd.to_numeric(df['rv_diff_extinction'], errors='coerce') < 0.1
         
         # 2. obs_quality < 0.9
-        # We ensure it's numeric, coercing errors to NaN (which won't be < 0.9)
+        # We ensure it's numeric, coercing errors to NaN (which won't be > 0.9)
         cond_obs = pd.to_numeric(df['obs_quality'], errors='coerce') < 0.99
-        
+
         # Apply the filter with OR logic (|)
         bad_files_df = df[cond_drs | cond_obs]
         
         # Extract the 'filename' column as a list
         bad_file_list = bad_files_df['filename'].tolist()
-        
+
         return bad_file_list
 
     except Exception as e:
@@ -59,10 +58,13 @@ def clean_up_events(target_dates):
         file_list = glob.glob(os.path.join(folder_path, "*.fits"))
         for f in file_list:
             filename = f.replace( "_CCF_A.fits", ".fits").replace(folder_path + '/', '')
-            total += 1      
+            total += 1 
+            # print(f"Filename: {filename}")
+            # print(f"Filter out list: {filter_out_list}")     
             if filename in filter_out_list:
                 count += 1
                 # change .fits to .stif
+                print(f"Change file extension: {f}")
                 change_file_extension(f)
 
     print(f"Filter out {count} files / {total} files")

@@ -103,13 +103,11 @@ def master_shifting(bjd, ccfBary, rvh,
             mu_jup_list.append(m)
 
             if zero_or_median == "zero":
-                # print("Shifting to zero")
                 # Shift to zero
                 ccf_to_use = compiled_ccf_list[len(compiled_ccf_list) - 1]
 
                 shift_to_zero = -(rv_from_HARPS)
                 rv_data_shifted = rv_data + shift_to_zero
-
                 f = interp1d(rv_data_shifted, ccf_to_use, kind='cubic', fill_value='extrapolate')
                 shifted_CCF_data = f(rv_data)
                 shifted_CCF_list.append(shifted_CCF_data)
@@ -121,7 +119,6 @@ def master_shifting(bjd, ccfBary, rvh,
                 m_zero = pfit[1]
                 mu_zero_list.append(m_zero)  # -0.1)
             else:  # shifted to median instead
-                # print("Shifting to median")
                 ccf_to_use = compiled_ccf_list[len(compiled_ccf_list) - 1]
                 shift_to_median = (np.mean(rvh) - rv_from_HARPS)
                 rv_data_shifted = rv_data + shift_to_median
@@ -137,6 +134,7 @@ def master_shifting(bjd, ccfBary, rvh,
                 m_zero = pfit[1]
                 mu_zero_list.append(m_zero)  # -0.1)
         else:  # Do not remove any planet signals *a priori*
+
             if zero_or_median == "zero":
                 # Shift to zero
                 ccf_to_use = compiled_ccf_list[len(compiled_ccf_list) - 1]
@@ -180,6 +178,7 @@ def master_shifting(bjd, ccfBary, rvh,
         CCF_normalized_list.append(CCF_normalized)
 
     # Create a dataframe
+
     d = {'BJD': BJD_list,
          'vrad_star': rvh,
          'og_ccf_list': og_ccf_list,

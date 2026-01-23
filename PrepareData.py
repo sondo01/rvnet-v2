@@ -64,10 +64,10 @@ def process_single_fits(filepath, public_release_values):
             
             # Extract Critical Params
             bjd = get_header_val(header, ['MJD-OBS', 'BJD', 'HIERARCH TNG QC BJD'])
-            hrv = get_header_val(header, ['HIERARCH TNG QC CCF RV', 'HIERARCH ESO QC CCF RV'])
+            # rv = get_header_val(header, ['HIERARCH TNG QC CCF RV', 'HIERARCH ESO QC CCF RV'])
 
-            rv = public_release_values.loc[release_name, 'rv_raw']/1000
-            # print(f"BRV: {rv}, verse FITS rv: {hrv}")
+            rv = (public_release_values.loc[release_name, 'rv_raw'])/1000
+            # print(f"BRV: {rv}, verse FITS rv: {rv_fits}")
             fwhm = public_release_values.loc[release_name, 'fwhm']/1000
             cont = public_release_values.loc[release_name, 'contrast']/1000
             bis = public_release_values.loc[release_name, 'bis_span']/1000
@@ -81,23 +81,21 @@ def process_single_fits(filepath, public_release_values):
 
             # Grid Parameters
             step = float(get_header_val(header, ['HIERARCH TNG RV STEP', 'CDELT1'], DEFAULT_STEP_SIZE))
-            rv_start = get_header_val(header, ['HIERARCH TNG RV START', 'CRVAL1'])
-            
-            if rv_start is None:
-                crval = float(get_header_val(header, ['CRVAL1'], 0.0))
-                crpix = float(get_header_val(header, ['CRPIX1'], 1.0))
-                rv_start = crval - (crpix - 1) * step
-            else:
-                rv_start = float(rv_start)
+            rv_start = get_header_val(header, ['HIERARCH TNG RV START'])
+
+            rv_start = float(rv_start)
 
             # CCF Processing
             # For 2D arrays (Orders, Pixels), take the last row (combined CCF)
             ccf_profile = data[-1, :] if data.ndim == 2 else data
+
             native_n = len(ccf_profile)
+        
             ccf_profile = ccf_profile.astype(np.float64)
 
             # Resampling
             native_grid = rv_start + np.arange(native_n) * step
+
             interpolator = interp1d(native_grid, ccf_profile, kind='cubic', fill_value='extrapolate')
             ccf_resampled = interpolator(TARGET_RV_GRID)
 
@@ -108,17 +106,18 @@ def process_single_fits(filepath, public_release_values):
                 ccf_resampled = np.nan_to_num(ccf_resampled, nan=median_val)
 
             weight = calculate_weight(header)
-
             return {
                 'bjd': float(bjd),
                 'rv': float(rv),
                 'ccf': ccf_resampled,
+                # 'ccf': ccf_profile,
                 'fwhm': float(fwhm),
                 'cont': float(cont),
                 'bis': float(bis),
                 'weight': weight,
                 'step': step,
                 'native_n': native_n,
+                'rv_start': rv_start
             }
     except Exception as e:
         print(f"Error reading {os.path.basename(filepath)}: {e}")
@@ -211,7 +210,7 @@ def load_harps_ccf_data(folder_path, public_release_values):
         'fwhm': np.array(final_data['fwhm'], dtype=np.float64),
         'cont': np.array(final_data['cont'], dtype=np.float64),
         'bis': np.array(final_data['bis'], dtype=np.float64),
-        'step': 0.25, # Resampled Grid Step
+        'step': 0.82, # Resampled Grid Step
         'native_step': np.median(step_list) if step_list else DEFAULT_STEP_SIZE,
         'native_n': int(stats.mode(native_n_list, keepdims=True)[0][0]) if native_n_list else 49
     }
@@ -242,7 +241,7 @@ def process_date_residuals(data_dict, master_reference_ccf=None, is_reference_ge
     # 2. Daily Stacking (Median of aligned exposures)
     # Note: If len(data_dict['bjd']) > 1 (multiple nights in one folder), this stacks them all.
     daily_master_ccf = np.median(aligned_ccfs_arr, axis=0)
-    
+
     if is_reference_generation:
         return aligned_normalized_ccfs[0]
 
@@ -264,11 +263,13 @@ def plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffi
     
     if opt == "test":
         
-        for date, resid, color in collected_residuals:      
+        for date, resid, ccf, color in collected_residuals:    
             if date in ["2016-03-29", "2015-09-17", "2017-03-07", "2017-08-13"]:
-                plt.figure(figsize=(8, 6))   
-                plt.ylim([-0.0006, 0.0025])        
+                plt.figure(figsize=(8, 8))   
+                plt.ylim([-0.0006, 0.0025])    
+                # plt.ylim([0.4, 1.05])    
                 plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
+                # plt.plot(velocity_axis, ccf, color='black', linewidth=1.5, alpha=0.7, label=date)
                 plt.title(f"Combined Residual CCFs {date}\nRed = Redshifted, Blue = Blueshifted")
                 plt.xlabel("Radial Velocity (km/s) [Centered]")
                 plt.ylabel("Normalized Flux Residuals")
@@ -280,9 +281,10 @@ def plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffi
                 plt.show()
     else :
         plt.figure(figsize=(8, 4)) 
-        plt.ylim([-0.0006, 0.0035])
-        for date, resid, color in collected_residuals:            
-            plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
+        # plt.ylim([-0.0006, 0.0035])
+        for date, resid, ccf, color in collected_residuals:          
+            # plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
+            plt.plot(velocity_axis, ccf, color='black', linewidth=1.5, alpha=0.7, label=date)
 
         plt.title(f"Combined Residual CCFs\nRed = Redshifted, Blue = Blueshifted")
         plt.xlabel("Radial Velocity (km/s) [Centered]")
@@ -337,6 +339,7 @@ def run_pipeline(opt="test"):
 
     # 2. Process Targets
     collected_residuals = []
+    color_count = 0
     for date in target_dates:
         print(f"\nProcessing Target: {date}")
         target_path = os.path.join(base_data_dir, date)
@@ -346,15 +349,16 @@ def run_pipeline(opt="test"):
             continue
             
         daily_residual, daily_ccf = process_date_residuals(target_data, master_reference_ccf=master_reference)
-        
         # Color Logic
         target_mean_rv = np.mean(target_data['rvh'])
         # print(f"RV: {target_data['rvh']}")
         is_redshifted = (target_mean_rv - ref_mean_rv) > 0
         color = 'red' if is_redshifted else 'blue'
-        
-        collected_residuals.append((date, daily_residual, color))
-
+        if is_redshifted:
+            color_count += 1
+        collected_residuals.append((date, daily_residual, daily_ccf, color))
+    print(f"Number of dates: {len(collected_residuals)}")
+    print(f"Number of red dates: {color_count}")
     # 3. Final Plot
     plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffix=f"(Ref: {quiet_date})")
 
