@@ -171,8 +171,8 @@ def master_shifting(bjd, ccfBary, rvh,
         final_ccf_list.append(ccf_to_use)
 
         # normalize the CCFs
-        x_left = ccf_to_use[0:10]
-        x_right = ccf_to_use[39:49]
+        x_left = ccf_to_use[0:2]
+        x_right = ccf_to_use[47:49]
         x_norm_range = list(x_left) + list(x_right)
         CCF_normalized = ccf_to_use * (1 / np.mean(x_norm_range))
         CCF_normalized_list.append(CCF_normalized)
