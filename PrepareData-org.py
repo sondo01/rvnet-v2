@@ -387,24 +387,13 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_
     print(f"cff_residual_list.shape: {cff_residual_list.shape}")
     CCF_normalized_list_cutoff = CCF_normalized_list[:, 1:-2]
     CCF_residual_list_cutoff = cff_residual_list[:, 1:-2]
-    # Calculate median and standard deviation across the entire dataset (axis 0)
-    # shapes: (N_pixels,)
-    median_ccf = np.median(cff_residual_list, axis=0)
-    std_ccf = np.std(cff_residual_list, axis=0)
     
-    # Avoid division by zero if std is zero (though unlikely for real data)
-    std_ccf[std_ccf == 0] = 1.0
-
-    # Normalize: (Input - Median) / Std
-    ccf_residual_rescaled = (cff_residual_list - median_ccf) / std_ccf
-    
-    # Normalize cutoff version similarly (re-slicing the normalized full array is safer/consistent)
-    ccf_residual_rescaled_cutoff = ccf_residual_rescaled[:, 1:-2]
+    # Note: User asked to ignore rescaling for now, so we skip ccf_residual_rescaled/_cutoff
 
     # 8. Save to NPZ
     np.savez(
         outfile_name,
-        BJD=bjd,    
+        BJD=bjd,
         vrad_star=vrad_star,
         og_ccf_list=og_ccf_list,
         jup_shifted_CCF_data_list=jup_shifted_CCF_data_list,
@@ -413,8 +402,8 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_
         cff_residual_list=cff_residual_list,
         CCF_normalized_list_cutoff=CCF_normalized_list_cutoff,
         CCF_residual_list_cutoff=CCF_residual_list_cutoff,
-        ccf_residual_rescaled = ccf_residual_rescaled,
-        ccf_residual_rescaled_cutoff = ccf_residual_rescaled_cutoff,
+        ccf_residual_rescaled = cff_residual_list / np.max(np.abs(cff_residual_list), axis=1, keepdims=True), # (Need review)
+        ccf_residual_rescaled_cutoff = CCF_residual_list_cutoff / np.max(np.abs(CCF_residual_list_cutoff), axis=1, keepdims=True), # (Need review)
         mu_og_list=mu_og_list,
         mu_jup_list=mu_jup_list,
         mu_zero_list=mu_zero_list,
