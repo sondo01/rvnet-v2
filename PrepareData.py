@@ -66,7 +66,8 @@ def process_single_fits(filepath, public_release_values):
             bjd = get_header_val(header, ['MJD-OBS', 'BJD', 'HIERARCH TNG QC BJD'])
             # rv = get_header_val(header, ['HIERARCH TNG QC CCF RV', 'HIERARCH ESO QC CCF RV'])
 
-            rv = (public_release_values.loc[release_name, 'rv_raw'])/1000
+            rv = (public_release_values.loc[release_name, 'rv'])/1000
+
             # print(f"BRV: {rv}, verse FITS rv: {rv_fits}")
             fwhm = public_release_values.loc[release_name, 'fwhm']/1000
             cont = public_release_values.loc[release_name, 'contrast']/1000
@@ -106,6 +107,7 @@ def process_single_fits(filepath, public_release_values):
                 ccf_resampled = np.nan_to_num(ccf_resampled, nan=median_val)
 
             weight = calculate_weight(header)
+
             return {
                 'bjd': float(bjd),
                 'rv': float(rv),
@@ -203,6 +205,7 @@ def load_harps_ccf_data(folder_path, public_release_values):
             final_data['bis'].append(avg['bis'])
 
     # Format Output
+
     return {
         'bjd': np.array(final_data['bjd'], dtype=np.float64),
         'rvh': np.array(final_data['rvh'], dtype=np.float64),
@@ -298,7 +301,7 @@ def plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffi
         plt.tight_layout()
         plt.show()
 
-def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_axis, cutoff_width=23):
+def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_width=23):
     """
     Aggregates a list of Pandas DataFrames, computes residuals and cutoffs, 
     and saves to an .npz file.
@@ -314,7 +317,6 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_
         print("No data collected to save.")
         return
 
-    
     # 1. Concatenate all daily DataFrames into one master DataFrame
     full_df = pd.concat(dataframe_list, ignore_index=True)
 
@@ -384,19 +386,30 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_
 
     # Broadcast subtraction: (N_samples, N_pixels) - (N_pixels,)
     cff_residual_list = CCF_normalized_list - master_reference_ccf
-    print(f"cff_residual_list.shape: {cff_residual_list.shape}")
     CCF_normalized_list_cutoff = CCF_normalized_list[:, 1:-2]
     CCF_residual_list_cutoff = cff_residual_list[:, 1:-2]
     # Calculate median and standard deviation across the entire dataset (axis 0)
     # shapes: (N_pixels,)
-    median_ccf = np.median(cff_residual_list, axis=0)
-    std_ccf = np.std(cff_residual_list, axis=0)
-    
-    # Avoid division by zero if std is zero (though unlikely for real data)
-    std_ccf[std_ccf == 0] = 1.0
+    # Calculate median and standard deviation across the entire dataset (axis 0)
+    def normalize_arr(arr):
+        med = np.median(arr, axis=0)
+        std = np.std(arr, axis=0)
+        # Handle zero std
+        if np.isscalar(std):
+            if std == 0: std = 1.0
+        else:
+            std[std == 0] = 1.0
+        return (arr - med) / std
 
-    # Normalize: (Input - Median) / Std
-    ccf_residual_rescaled = (cff_residual_list - median_ccf) / std_ccf
+    ccf_residual_rescaled = normalize_arr(cff_residual_list)
+    vrad_star_rescaled = normalize_arr(vrad_star)
+    og_ccf_list_rescaled = normalize_arr(og_ccf_list)
+    jup_shifted_CCF_data_list_rescaled = normalize_arr(jup_shifted_CCF_data_list)
+    zero_shifted_CCF_list_rescaled = normalize_arr(zero_shifted_CCF_list)
+    mu_og_list_rescaled = normalize_arr(mu_og_list)
+    mu_zero_list_rescaled = normalize_arr(mu_zero_list)
+    cont_rescaled = normalize_arr(cont)
+    bis_rescaled = normalize_arr(bis)
     
     # Normalize cutoff version similarly (re-slicing the normalized full array is safer/consistent)
     ccf_residual_rescaled_cutoff = ccf_residual_rescaled[:, 1:-2]
@@ -421,8 +434,30 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, velocity_
         fwhm=fwhm,
         cont=cont,
         bis=bis,
-        shift_by_rv=shift_by_rv
+        shift_by_rv=shift_by_rv,
     )
+    # np.savez(
+    #     outfile_name,
+    #     BJD=bjd,    
+    #     vrad_star=vrad_star_rescaled,
+    #     og_ccf_list=og_ccf_list_rescaled,
+    #     jup_shifted_CCF_data_list=jup_shifted_CCF_data_list_rescaled,
+    #     zero_shifted_CCF_list=zero_shifted_CCF_list_rescaled,
+    #     CCF_normalized_list=CCF_normalized_list,
+    #     cff_residual_list=cff_residual_list,
+    #     CCF_normalized_list_cutoff=CCF_normalized_list_cutoff,
+    #     CCF_residual_list_cutoff=CCF_residual_list_cutoff,
+    #     ccf_residual_rescaled = ccf_residual_rescaled,
+    #     ccf_residual_rescaled_cutoff = ccf_residual_rescaled_cutoff,
+    #     mu_og_list=mu_og_list_rescaled,
+    #     mu_jup_list=mu_jup_list,
+    #     mu_zero_list=mu_zero_list_rescaled,
+    #     fwhm=fwhm,
+    #     cont=cont_rescaled,
+    #     bis=bis_rescaled,
+    #     shift_by_rv=shift_by_rv,
+    # )
+
     # plot_combined_residuals(velocity_axis, cff_residual_list, "test", title_suffix=f"(Ref: 2018-03-29)")
     print(f"Successfully saved {outfile_name}")
 
@@ -488,8 +523,7 @@ def run_pipeline(opt="test"):
     createNpzFiles(
         collected_dataframes, 
         master_reference, 
-        'New_HARPS_ready_for_TF_records.npz',
-        velocity_axis
+        'New_HARPS_ready_for_TF_records.npz'
     )
     print(f"Number of dates: {len(collected_residuals)}")
     # 3. Final Plot

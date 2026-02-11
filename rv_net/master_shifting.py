@@ -180,7 +180,7 @@ def master_shifting(bjd, ccfBary, rvh,
     # Create a dataframe
 
     d = {'BJD': BJD_list,
-         'vrad_star': rvh,
+         'vrad_star': rv_from_HARPS_list,
          'og_ccf_list': og_ccf_list,
          'jup_shifted_CCF_data_list': jup_shifted_CCF_data_list,
          'zero_shifted_CCF_list': shifted_CCF_list,
