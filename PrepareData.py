@@ -439,7 +439,7 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_wi
     # np.savez(
     #     outfile_name,
     #     BJD=bjd,    
-    #     vrad_star=vrad_star_rescaled,
+    #     vrad_star=vrad_star,
     #     og_ccf_list=og_ccf_list_rescaled,
     #     jup_shifted_CCF_data_list=jup_shifted_CCF_data_list_rescaled,
     #     zero_shifted_CCF_list=zero_shifted_CCF_list_rescaled,
