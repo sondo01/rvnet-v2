@@ -43,22 +43,22 @@ For more information, please refer to the original repository.
 
 ## Download Data from DACE
 
-4. Download fits files from DACE using *dace_query_by_date.py*
+4. Download fits files from DACE using *dace_query_fits.py*
 
     ```
-    $ python dace_query_by_date.py
+    $ python dace_query_fits.py
     ```
 
-5. Download *public_release_timeseries.csv* files from DACE using *dace_query_all.py*
+5. Download *public_release_timeseries.csv* files from DACE using *dace_query_public_release.py*
 
     ```
-    $ python dace_query_all.py
+    $ python dace_query_public_release.py
     ```
 
 6. Because filename in *public_release_timeseries.csv* is not in the same format as fits files, we need to correct it
 
     ```
-    $ python correct_release_file.py
+    $ python correct_release_filename.py
     ```
 
 ## Preprocess raw data
