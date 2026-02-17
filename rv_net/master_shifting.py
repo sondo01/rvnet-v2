@@ -86,11 +86,12 @@ def master_shifting(bjd, ccfBary, rvh,
 
         if removed_planet_rvs[0] != "NULL":  # Remove known planet signals *a priori*
             jupiter_shift = removed_planet_rvs[i]
+            # print(f"Jupiter shift: {jupiter_shift}")
             v_rad_raw = rvh[i] + removed_planet_rvs[i]
             v_rad_raw_list.append(v_rad_raw)
 
             # planet removal shift
-            rv_data_jupiter_shift = rv_data + jupiter_shift  # minus sign
+            rv_data_jupiter_shift = rv_data - jupiter_shift  # minus sign
             f_jup = interp1d(rv_data_jupiter_shift, CCF_data, kind=spline_method, fill_value='extrapolate')
             jupiter_shifted_CCF_data = f_jup(rv_data)
             jup_shifted_CCF_data_list.append(jupiter_shifted_CCF_data)

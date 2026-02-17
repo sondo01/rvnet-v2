@@ -72,9 +72,11 @@ def process_single_fits(filepath, public_release_values):
             fwhm = public_release_values.loc[release_name, 'fwhm']/1000
             cont = public_release_values.loc[release_name, 'contrast']/1000
             bis = public_release_values.loc[release_name, 'bis_span']/1000
-
+            berv_bary_to_helio  = public_release_values.loc[release_name, 'berv_bary_to_helio']/1000
+            rv_diff_extinction = public_release_values.loc[release_name, 'rv_diff_extinction']/1000
+            removed_planet_rvs = berv_bary_to_helio + 0*rv_diff_extinction
             # Validation
-            if None in [bjd, rv, fwhm, cont]:
+            if None in [bjd, rv, fwhm, cont, removed_planet_rvs]:
                 return None
             
             if float(fwhm) == 0 or float(cont) == 0:
@@ -94,25 +96,25 @@ def process_single_fits(filepath, public_release_values):
         
             ccf_profile = ccf_profile.astype(np.float64)
 
-            # Resampling
-            native_grid = rv_start + np.arange(native_n) * step
+            # Resampling, use this if we want 161 points
+            # native_grid = rv_start + np.arange(native_n) * step
 
-            interpolator = interp1d(native_grid, ccf_profile, kind='cubic', fill_value='extrapolate')
-            ccf_resampled = interpolator(TARGET_RV_GRID)
+            # interpolator = interp1d(native_grid, ccf_profile, kind='cubic', fill_value='extrapolate')
+            # ccf_resampled = interpolator(TARGET_RV_GRID)
 
-            # NaNs Check
-            if not np.isfinite(ccf_resampled).all():
-                median_val = np.nanmedian(ccf_resampled)
-                ccf_resampled[~np.isfinite(ccf_resampled)] = median_val
-                ccf_resampled = np.nan_to_num(ccf_resampled, nan=median_val)
+            # # NaNs Check
+            # if not np.isfinite(ccf_resampled).all():
+            #     median_val = np.nanmedian(ccf_resampled)
+            #     ccf_resampled[~np.isfinite(ccf_resampled)] = median_val
+            #     ccf_resampled = np.nan_to_num(ccf_resampled, nan=median_val)
 
             weight = calculate_weight(header)
 
             return {
                 'bjd': float(bjd),
                 'rv': float(rv),
-                'ccf': ccf_resampled,
-                # 'ccf': ccf_profile,
+                'removed_planet_rvs': float(removed_planet_rvs),
+                'ccf': ccf_profile,
                 'fwhm': float(fwhm),
                 'cont': float(cont),
                 'bis': float(bis),
@@ -132,7 +134,7 @@ def compute_nightly_average(nightly_data):
     # Convert list of dicts to dict of lists/arrays
     keys = nightly_data[0].keys()
     # Be explicit about what to stack to avoid jagged arrays if schemas differ slightly
-    stack_keys = ['bjd', 'rv', 'fwhm', 'cont', 'bis', 'weight', 'ccf']
+    stack_keys = ['bjd', 'rv', 'fwhm', 'cont', 'bis', 'weight', 'ccf', 'removed_planet_rvs']
     arrays = {k: np.array([d[k] for d in nightly_data]) for k in stack_keys}
     
     weights = arrays['weight']
@@ -143,7 +145,7 @@ def compute_nightly_average(nightly_data):
 
     # Weighted Averages
     avg_data = {}
-    for k in ['bjd', 'rv', 'fwhm', 'cont', 'bis']:
+    for k in ['bjd', 'rv', 'fwhm', 'cont', 'bis', 'removed_planet_rvs']:
         avg_data[k] = np.sum(arrays[k] * weights) / sum_weights
     
     # CCF Weighted Average (Broadcasting)
@@ -191,7 +193,7 @@ def load_harps_ccf_data(folder_path, public_release_values):
     print(f"Binning {valid_count} exposures into {len(night_groups)} nights...")
 
     # Compute Averages
-    final_data = {k: [] for k in ['bjd', 'rvh', 'ccfBary', 'fwhm', 'cont', 'bis']}
+    final_data = {k: [] for k in ['bjd', 'rvh', 'ccfBary', 'fwhm', 'cont', 'bis', 'removed_planet_rvs']}
     
     for night in sorted(night_groups.keys()):        
         avg = compute_nightly_average(night_groups[night])
@@ -203,12 +205,14 @@ def load_harps_ccf_data(folder_path, public_release_values):
             final_data['fwhm'].append(avg['fwhm'])
             final_data['cont'].append(avg['cont'])
             final_data['bis'].append(avg['bis'])
+            final_data['removed_planet_rvs'].append(avg['removed_planet_rvs'])
 
     # Format Output
 
     return {
         'bjd': np.array(final_data['bjd'], dtype=np.float64),
         'rvh': np.array(final_data['rvh'], dtype=np.float64),
+        'removed_planet_rvs': np.array(final_data['removed_planet_rvs'], dtype=np.float64),
         'ccfBary': final_data['ccfBary'], # List of arrays
         'fwhm': np.array(final_data['fwhm'], dtype=np.float64),
         'cont': np.array(final_data['cont'], dtype=np.float64),
@@ -218,13 +222,13 @@ def load_harps_ccf_data(folder_path, public_release_values):
         'native_n': int(stats.mode(native_n_list, keepdims=True)[0][0]) if native_n_list else 49
     }
 
-def process_date_residuals(data_dict, master_reference_ccf=None, is_reference_generation=False):
+def process_date_residuals(data_dict, is_reference_generation=False):
     """
     Runs the master_shifting pipeline on a dataset.
     """
     # 1. Master Shifting (Align to Zero)
-    removed_planet_rvs = np.zeros_like(data_dict['rvh'])
-    
+    # removed_planet_rvs = np.zeros_like(data_dict['rvh'])
+    removed_planet_rvs = data_dict['removed_planet_rvs']
     output = master_shifting(
         bjd=data_dict['bjd'],
         ccfBary=data_dict['ccfBary'],
@@ -257,49 +261,6 @@ def process_date_residuals(data_dict, master_reference_ccf=None, is_reference_ge
     #     return cff_residual_list, daily_ccf, output
     
     # return daily_master_ccf, output
-
-def plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffix=""):
-    """
-    Plots all collected residuals in a single figure.
-    """
-    # if not collected_residuals:
-    #     print("No residuals to plot.")
-    #     return
-    
-    if opt == "test":
-        
-        for date, resid, ccf, color in collected_residuals:    
-            if date in ["2015-07-29","2016-03-29", "2015-09-17", "2017-03-07", "2017-08-13"]:
-                plt.figure(figsize=(8, 8))   
-                plt.ylim([-0.0006, 0.0025])    
-                # plt.ylim([0.4, 1.05])    
-                plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
-                # plt.plot(velocity_axis, ccf, color='black', linewidth=1.5, alpha=0.7, label=date)
-                plt.title(f"Combined Residual CCFs {date}\nRed = Redshifted, Blue = Blueshifted")
-                plt.xlabel("Radial Velocity (km/s) [Centered]")
-                plt.ylabel("Normalized Flux Residuals")
-                plt.xlim(min(velocity_axis), max(velocity_axis))
-                plt.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
-                plt.grid(True, linestyle=':', alpha=0.6)
-                # plt.legend(loc='best') # Optional if too many dates
-                plt.tight_layout()
-                plt.show()
-    else :
-        plt.figure(figsize=(8, 4)) 
-        plt.ylim([-0.0006, 0.0035])
-        for date, resid, ccf, color in collected_residuals:          
-            plt.plot(velocity_axis, resid, color=color, linewidth=1.5, alpha=0.7, label=date)
-            # plt.plot(velocity_axis, ccf, color='black', linewidth=1.5, alpha=0.7, label=date)
-
-        plt.title(f"Combined Residual CCFs\nRed = Redshifted, Blue = Blueshifted")
-        plt.xlabel("Radial Velocity (km/s) [Centered]")
-        plt.ylabel("Normalized Flux Residuals")
-        plt.xlim(min(velocity_axis), max(velocity_axis))
-        plt.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
-        plt.grid(True, linestyle=':', alpha=0.6)
-        # plt.legend(loc='best') # Optional if too many dates
-        plt.tight_layout()
-        plt.show()
 
 def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_width=23):
     """
@@ -364,14 +325,6 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_wi
     shift_by_rv = np.array(0.0) 
 
     # 7. Compute Residuals
-    
-    # FIX: Handle case where user passes a tuple (CCF, metadata) instead of just CCF
-    # This often happens if the output of process_date_residuals is passed directly
-    if isinstance(master_reference_ccf, (tuple, list)) and len(master_reference_ccf) == 2:
-        # If the first element looks like a CCF (length > 2), assume it's the data
-        if hasattr(master_reference_ccf[0], '__len__') and len(master_reference_ccf[0]) > 2:
-            print("Warning: master_reference_ccf appears to be a tuple (len=2). using master_reference_ccf[0] as the reference array.")
-            master_reference_ccf = master_reference_ccf[0]
 
     # Force to numpy array to ensure shape properties work
     master_reference_ccf = np.array(master_reference_ccf)
@@ -384,13 +337,12 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_wi
               f"does not match data length ({current_ccf_len}). Trimming master ref.")
         master_reference_ccf = master_reference_ccf[:current_ccf_len]
 
-    # Broadcast subtraction: (N_samples, N_pixels) - (N_pixels,)
+    # Subtract master reference (quiet CCF) from normalized CCF
     cff_residual_list = CCF_normalized_list - master_reference_ccf
     CCF_normalized_list_cutoff = CCF_normalized_list[:, 1:-2]
     CCF_residual_list_cutoff = cff_residual_list[:, 1:-2]
-    # Calculate median and standard deviation across the entire dataset (axis 0)
-    # shapes: (N_pixels,)
-    # Calculate median and standard deviation across the entire dataset (axis 0)
+
+    # Calculate median and standard deviation across the entire dataset
     def normalize_arr(arr):
         med = np.median(arr, axis=0)
         std = np.std(arr, axis=0)
@@ -402,16 +354,8 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_wi
         return (arr - med) / std
 
     ccf_residual_rescaled = normalize_arr(cff_residual_list)
-    vrad_star_rescaled = normalize_arr(vrad_star)
-    og_ccf_list_rescaled = normalize_arr(og_ccf_list)
-    jup_shifted_CCF_data_list_rescaled = normalize_arr(jup_shifted_CCF_data_list)
-    zero_shifted_CCF_list_rescaled = normalize_arr(zero_shifted_CCF_list)
-    mu_og_list_rescaled = normalize_arr(mu_og_list)
-    mu_zero_list_rescaled = normalize_arr(mu_zero_list)
-    cont_rescaled = normalize_arr(cont)
-    bis_rescaled = normalize_arr(bis)
     
-    # Normalize cutoff version similarly (re-slicing the normalized full array is safer/consistent)
+    # Why do we need this cutoff?????
     ccf_residual_rescaled_cutoff = ccf_residual_rescaled[:, 1:-2]
 
     # 8. Save to NPZ
@@ -436,32 +380,8 @@ def createNpzFiles(dataframe_list, master_reference_ccf, outfile_name, cutoff_wi
         bis=bis,
         shift_by_rv=shift_by_rv,
     )
-    # np.savez(
-    #     outfile_name,
-    #     BJD=bjd,    
-    #     vrad_star=vrad_star,
-    #     og_ccf_list=og_ccf_list_rescaled,
-    #     jup_shifted_CCF_data_list=jup_shifted_CCF_data_list_rescaled,
-    #     zero_shifted_CCF_list=zero_shifted_CCF_list_rescaled,
-    #     CCF_normalized_list=CCF_normalized_list,
-    #     cff_residual_list=cff_residual_list,
-    #     CCF_normalized_list_cutoff=CCF_normalized_list_cutoff,
-    #     CCF_residual_list_cutoff=CCF_residual_list_cutoff,
-    #     ccf_residual_rescaled = ccf_residual_rescaled,
-    #     ccf_residual_rescaled_cutoff = ccf_residual_rescaled_cutoff,
-    #     mu_og_list=mu_og_list_rescaled,
-    #     mu_jup_list=mu_jup_list,
-    #     mu_zero_list=mu_zero_list_rescaled,
-    #     fwhm=fwhm,
-    #     cont=cont_rescaled,
-    #     bis=bis_rescaled,
-    #     shift_by_rv=shift_by_rv,
-    # )
 
-    # plot_combined_residuals(velocity_axis, cff_residual_list, "test", title_suffix=f"(Ref: 2018-03-29)")
     print(f"Successfully saved {outfile_name}")
-
-
 
 def run_pipeline(opt="test"):
     base_data_dir = "DATA"
@@ -478,7 +398,6 @@ def run_pipeline(opt="test"):
     else:
         target_dates = ["2015-07-29","2016-03-29", "2015-09-17", "2017-03-07", "2017-08-13"]
   
-    
     # Get a list of processed data from public_release_timeseries.csv
     public_release_values = pd.read_csv('public_release_timeseries.csv', index_col='filename')
     # Remove any leading/trailing spaces from column names
@@ -490,24 +409,16 @@ def run_pipeline(opt="test"):
     # 1. Generate Master Reference (quiet date on 2018-03-29). We will subtract this from all other dates to obtain the residuals CCF.
     print(f"\nProcessing Reference: {quiet_date}")
     ref_data = load_harps_ccf_data(os.path.join(base_data_dir, quiet_date), public_release_values)
-    # print(f"ref_data : {ref_data}")
+
     if ref_data is None:
         return
 
     master_reference = process_date_residuals(ref_data, is_reference_generation=True)
-    ref_mean_rv = np.mean(ref_data['rvh'])
-
-    
-    # Grid Setup for plotting
-    # ccf_step = ref_data.get('step', 0.25)
-    ccf_step = 0.82
-    n_points = len(master_reference)
-    velocity_axis = (np.arange(n_points) - (n_points // 2)) * ccf_step 
 
     # 2. Process Targets
     collected_residuals = []
     collected_dataframes = []
-    color_count = 0
+
     for date in target_dates:
         print(f"\nProcessing Target: {date}")
         target_path = os.path.join(base_data_dir, date)
@@ -516,18 +427,16 @@ def run_pipeline(opt="test"):
         if target_data is None:
             continue
             
-        output = process_date_residuals(target_data, master_reference_ccf=master_reference)
+        output = process_date_residuals(target_data)
         collected_dataframes.append(output)
         collected_residuals.append((date, output))
-
+    # Now create .npz file
     createNpzFiles(
         collected_dataframes, 
         master_reference, 
         'New_HARPS_ready_for_TF_records.npz'
     )
     print(f"Number of dates: {len(collected_residuals)}")
-    # 3. Final Plot
-    # plot_combined_residuals(velocity_axis, collected_residuals, opt, title_suffix=f"(Ref: {quiet_date})")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -539,7 +448,3 @@ if __name__ == "__main__":
             run_pipeline(input_arg)
     else:
         run_pipeline()
-
-        
-# list_ccf_resid = np.random.rand(len(list_ccf_resid), 49)
-# new_list_ccf_resid = list_ccf_resid[:, 1:-2]
