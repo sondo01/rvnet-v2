@@ -4,7 +4,7 @@ from dace_query.sun import Sun
 # 1. Configuration
 start_date = "2015-07-29"
 end_date = "2018-05-24"
-output_dir = f"data_{start_date}_to_{end_date}"
+output_dir = f"DATA"
 
 # Ensure output directory exists to avoid FileNotFoundError
 os.makedirs(output_dir, exist_ok=True)

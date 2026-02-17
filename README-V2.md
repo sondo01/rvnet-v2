@@ -1,78 +1,99 @@
 # rv_net
 
-File new.ipynb là bản chỉnh sửa từ file 2_3_1_HARPS_Linear_FC_CN_June10_2023.ipynb để phù hợp với Tensorflow v2.
+This is a forge of Zoe de Beurs' rv_net repository https://github.com/zdebeurs/rv_net.git.
+For more information, please refer to the original repository.
 
-Phiên bản này đã test chạy trên Debian Linux 12, với Python 3.11.2
-
-## Steps
-
-1. Tạo môi trường Python ảo với Python 3.11 (thay vì dùng conda phức tạp):
-
-```
- mkdir Astro
- cd Astro
- python3.11 -m venv myvenv
- source myvenv/bin/activate
-```
+## Installation
 
 1. Clone repo:
 
-```
- git clone https://github.com/sondo/rvnet-v2.git
-```
+    ```
+    git clone https://github.com/sondo/rvnet-v2.git
+    ```
 
-Khi này trong thư mục Astro sẽ có thư mục con rvnet-v2
+    At this point, the rvnet-v2 directory should be created
 
-1. Install các dependencies:
+2. Create a virtual environment with Python 3.11 (instead of using complex conda) and Install dependencies:
 
-```
- cd rvnet-v2
- pip install -r requirements.txt
-```
+    ```
+    $ cd rvnet-v2
+    $ python3.11 -m venv .venv
+    $ source .venv/bin/activate
+    $ pip install -r requirements.txt
+    ```
 
-1. Chạy Jupyter từ trong môi trường ảo:
+3. We need to install mpyfit: <https://github.com/evertrol/mpyfit>
 
-```
- jupyter lab
-```
+    - For MAC: run 
+        ``` 
+        $ pip install -e . 
+        ``` 
+        (don't forget . at the end)
 
-1. Chạy tuần tự các cells trong Jupyter notebook new.ipynb
+    - For Linux:
+        ```
+        $ git clone https://github.com/evertrol/mpyfit
+        $ cd mpyfit
+        $ python setup.py install --user
+        $ python setup.py build_ext --inplace
+        $ cp -r mpyfit ../
+        ```
 
-## CCF raw data to NPZ
+    After this step, we need to check if the **mpyfit** directory exists in the rvnet-v2 directory. The mpyfit directory must have a __init__.py file
 
-1. We need to install mpyfit: <https://github.com/evertrol/mpyfit>
+## Download Data from DACE
 
-For MAC: run ``` pip install -e . ``` (don't forget . et the end)
+4. Download fits files from DACE using *dace_query_by_date.py*
 
-```
-git clone https://github.com/evertrol/mpyfit
-cd mpyfit
-python setup.py install --user
-python setup.py build_ext --inplace
-cp -r mpyfit ../
-```
+    ```
+    $ python dace_query_by_date.py
+    ```
 
-Sau bước này, cần kiểm tra xem dưới thư mục rvnet-v2 có thư mục mpyfit chưa. thư mục mpyfit này phải có file __init__.py
+5. Download *public_release_timeseries.csv* files from DACE using *dace_query_all.py*
 
-1. Run the script
-Clean up bad observations (cloud-free <99% or rv_diff_extinction < 0.1m/s)
+    ```
+    $ python dace_query_all.py
+    ```
 
-```
-python clean_up.py
-```
+6. Because filename in *public_release_timeseries.csv* is not in the same format as fits files, we need to correct it
 
-All bad observations will be changed to .stif and so be ignored in the next steps
+    ```
+    $ python correct_release_file.py
+    ```
 
-- Note: to reverse the change, we need to run:
+## Preprocess raw data
 
-```
-./stif2fits.sh
-```
+7. Clean up bad observations (cloud-free <99% or rv_diff_extinction < 0.1m/s)
 
-After that we can convert CCF raw data to NPZ files
+    ```
+    $ python clean_up.py
+    ```
 
-```
-python PrepareData.py
-```
+    All bad observations will be changed to *.stif* and so will be ignored in the next steps
 
-This script creates numpy files (.npz) ready for the next steps (create TF files)
+- Note: to reverse the change, run:
+
+    ```
+    $ ./stif2fits.sh
+    ```
+
+8. Create NPZ files from raw data
+
+    ```
+    python PrepareData.py
+    ```
+
+    This script creates numpy files (in *.npz* format) ready for the next steps:
+
+9.  Create TF files:
+
+    Run **Making_TF_records_tutorial.ipynb**
+
+10. Train model: 
+
+    Run **new.ipynb**
+
+## Note: 
+- *new.ipynb* is a Tensorflow v2 version of *2_3_1_HARPS_Linear_FC_CN_June10_2023.ipynb*. (Tested on Debian Linux 12, with Python 3.11)
+- *master_shifting.py* was modified to work with the new 49 pixel CCFs
+
