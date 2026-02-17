@@ -1,27 +1,99 @@
 # rv_net
 
+This is a forge of Zoe de Beurs' rv_net repository https://github.com/zdebeurs/rv_net.git.
+For more information, please refer to the original repository.
 
-## Steps
-1. Download all the files from this repository
-2. navigate to the rv_net folder in your terminal. Then, replicate the anaconda environment by typing the following in a command prompt
-<code> conda env create -f tensorflow_env.yml </code>
-3. Run the <code>2_3_1_HARPS_Linear_FC_CNN_June10_2023.ipynb</code>  script
+## Installation
 
+1. Clone repo:
 
-## Modifications for making .yml files to work on Other computers
-1. Create the .yml file without builds
-   <code>conda env export --no-builds > my_environment.yml</code>
-2. In addition, this may not work on Windows devices. There does not seem to be an easy way to automatically remove OS-specific packages, but there is a way to see which packages were specifically installed using <code>conda install</code> so we could use that to remove all other packages from the .yml file.
-   <code>conda env export --from-history</code>
+    ```
+    git clone https://github.com/sondo/rvnet-v2.git
+    ```
 
+    At this point, the rvnet-v2 directory should be created
 
-## Other important things
-Allocation: <code> sched_mit_andrewv </code>
+2. Create a virtual environment with Python 3.11 (instead of using complex conda) and Install dependencies:
 
-directory: <code> /nfs/mkilab001/Groups/Andrew_Vanderburg </code>
+    ```
+    $ cd rvnet-v2
+    $ python3.11 -m venv .venv
+    $ source .venv/bin/activate
+    $ pip install -r requirements.txt
+    ```
 
-loading anaconda <code> module load anaconda3/2021.11 </code>
+3. We need to install mpyfit: <https://github.com/evertrol/mpyfit>
 
-extracting a ton of tar.gz files into one directory (directory_name) <code> cat *.tar | tar -xvf - -i -C directory_name </code>
+    - For MAC: run 
+        ``` 
+        $ pip install -e . 
+        ``` 
+        (don't forget . at the end)
 
+    - For Linux:
+        ```
+        $ git clone https://github.com/evertrol/mpyfit
+        $ cd mpyfit
+        $ python setup.py install --user
+        $ python setup.py build_ext --inplace
+        $ cp -r mpyfit ../
+        ```
+
+    After this step, we need to check if the **mpyfit** directory exists in the rvnet-v2 directory. The mpyfit directory must have a __init__.py file
+
+## Download Data from DACE
+
+4. Download fits files from DACE using *dace_query_by_date.py*
+
+    ```
+    $ python dace_query_by_date.py
+    ```
+
+5. Download *public_release_timeseries.csv* files from DACE using *dace_query_all.py*
+
+    ```
+    $ python dace_query_all.py
+    ```
+
+6. Because filename in *public_release_timeseries.csv* is not in the same format as fits files, we need to correct it
+
+    ```
+    $ python correct_release_file.py
+    ```
+
+## Preprocess raw data
+
+7. Clean up bad observations (cloud-free <99% or rv_diff_extinction < 0.1m/s)
+
+    ```
+    $ python clean_up.py
+    ```
+
+    All bad observations will be changed to *.stif* and so will be ignored in the next steps
+
+- Note: to reverse the change, run:
+
+    ```
+    $ ./stif2fits.sh
+    ```
+
+8. Create NPZ files from raw data
+
+    ```
+    python PrepareData.py
+    ```
+
+    This script creates numpy files (in *.npz* format) ready for the next steps:
+
+9.  Create TF files:
+
+    Run **Making_TF_records_tutorial.ipynb**
+
+10. Train model: 
+
+    Run **new.ipynb**
+
+## Note: 
+- *new.ipynb* is a Tensorflow v2 version of *2_3_1_HARPS_Linear_FC_CN_June10_2023.ipynb*. (Tested on Debian Linux 12, with Python 3.11)
+- *master_shifting.py* was modified to work with the new 49 pixel CCFs
 
