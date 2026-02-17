@@ -74,7 +74,7 @@ def process_single_fits(filepath, public_release_values):
             bis = public_release_values.loc[release_name, 'bis_span']/1000
             berv_bary_to_helio  = public_release_values.loc[release_name, 'berv_bary_to_helio']/1000
             rv_diff_extinction = public_release_values.loc[release_name, 'rv_diff_extinction']/1000
-            removed_planet_rvs = berv_bary_to_helio + 0*rv_diff_extinction
+            removed_planet_rvs = berv_bary_to_helio + rv_diff_extinction
             # Validation
             if None in [bjd, rv, fwhm, cont, removed_planet_rvs]:
                 return None
@@ -240,7 +240,7 @@ def process_date_residuals(data_dict, is_reference_generation=False):
         cont=data_dict['cont'],
         bis=data_dict['bis']
     )
-    
+
     # Extract Shifted CCFs
     aligned_normalized_ccfs = output['CCF_normalized_list'].tolist()
     aligned_ccfs_arr = np.array(aligned_normalized_ccfs, dtype=np.float64)
