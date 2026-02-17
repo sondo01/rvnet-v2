@@ -91,9 +91,9 @@ For more information, please refer to the original repository.
 
 10. Train model: 
 
-    Run **new.ipynb**
+    Run **training.ipynb**
 
 ## Note: 
-- *new.ipynb* is a Tensorflow v2 version of *2_3_1_HARPS_Linear_FC_CN_June10_2023.ipynb*. (Tested on Debian Linux 12, with Python 3.11)
+- *training.ipynb* is a Tensorflow v2 version of *2_3_1_HARPS_Linear_FC_CN_June10_2023.ipynb*. (Tested on Debian Linux 12, with Python 3.11)
 - *master_shifting.py* was modified to work with the new 49 pixel CCFs
 
