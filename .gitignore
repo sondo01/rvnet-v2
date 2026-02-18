@@ -9,7 +9,7 @@ ops
 backup
 DATA
 NPY
-New_HARPS_ready_for_TF_records.npz
+#New_HARPS_ready_for_TF_records.npz
 git-token.txt
 # Icon must end with two \r
 Icon

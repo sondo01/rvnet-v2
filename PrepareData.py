@@ -186,7 +186,7 @@ class HARPSDataPipeline:
                 return {
                     'bjd': float(bjd),
                     'rv': float(rv),
-                    'removed_planet_rvs': float(removed_planet_rvs),
+                    'removed_planet_rvs': float(-removed_planet_rvs),
                     'ccf': ccf_profile,
                     'fwhm': float(fwhm),
                     'cont': float(cont),

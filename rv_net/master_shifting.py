@@ -91,7 +91,7 @@ def master_shifting(bjd, ccfBary, rvh,
             v_rad_raw_list.append(v_rad_raw)
 
             # planet removal shift
-            rv_data_jupiter_shift = rv_data - jupiter_shift  # minus sign
+            rv_data_jupiter_shift = rv_data + jupiter_shift  # minus sign
             f_jup = interp1d(rv_data_jupiter_shift, CCF_data, kind=spline_method, fill_value='extrapolate')
             jupiter_shifted_CCF_data = f_jup(rv_data)
             jup_shifted_CCF_data_list.append(jupiter_shifted_CCF_data)
