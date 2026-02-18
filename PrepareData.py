@@ -169,7 +169,7 @@ class HARPSDataPipeline:
                     return None
                 
                 # Compute removed_planet_rvs for CCF shifting
-                removed_planet_rvs = berv + rv_diff_extinction
+                removed_planet_rvs = -1*(berv + rv_diff_extinction) # TODO: WHY MINUS SIGN?
                 
                 # Grid Parameters
                 step = float(self.get_header_val(header, ['HIERARCH TNG RV STEP', 'CDELT1'], self.DEFAULT_STEP_SIZE))
@@ -186,7 +186,7 @@ class HARPSDataPipeline:
                 return {
                     'bjd': float(bjd),
                     'rv': float(rv),
-                    'removed_planet_rvs': float(-removed_planet_rvs),
+                    'removed_planet_rvs': float(removed_planet_rvs),
                     'ccf': ccf_profile,
                     'fwhm': float(fwhm),
                     'cont': float(cont),
