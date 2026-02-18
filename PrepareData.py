@@ -147,6 +147,8 @@ class HARPSDataPipeline:
                 bjd = self.get_header_val(header, ['MJD-OBS', 'BJD', 'HIERARCH TNG QC BJD'])
                 
                 # Get RV and other params from release file (convert m/s to km/s)
+                # TODO: do not use public_release values but extract and calculate these values directly from DACE raw data (as bjd above)
+
                 try:
                     row = self.public_release_values.loc[release_name]
                 except KeyError:
